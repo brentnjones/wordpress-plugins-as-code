@@ -87,6 +87,9 @@ spec:
           readinessProbe:
             httpGet: { path: /wp-login.php, port: 8080 }
             initialDelaySeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             tcpSocket: { port: 8080 }
             initialDelaySeconds: 20
