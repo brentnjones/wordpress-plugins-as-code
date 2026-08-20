@@ -12,6 +12,12 @@ add_action( 'init', static function () {
 		return;
 	}
 
+	// Only run in wp-admin: some plugins' activation hooks redirect/exit
+	// (e.g. setup wizards), which must not happen on a front-end request.
+	if ( ! is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
+		return;
+	}
+
 	if ( ! function_exists( 'get_plugins' ) ) {
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	}
@@ -24,5 +30,17 @@ add_action( 'init', static function () {
 		return;
 	}
 
-	activate_plugins( $inactive );
+	// Activate one at a time and isolate failures: some plugins' activation
+	// hooks (setup wizards, requirement checks) can throw/fatal, and a single
+	// bad one must not block the rest or blank the whole request.
+	foreach ( $inactive as $plugin ) {
+		try {
+			$result = activate_plugin( $plugin );
+			if ( is_wp_error( $result ) ) {
+				error_log( sprintf( 'auto-activate-plugins: failed to activate %s: %s', $plugin, $result->get_error_message() ) );
+			}
+		} catch ( \Throwable $e ) {
+			error_log( sprintf( 'auto-activate-plugins: exception activating %s: %s', $plugin, $e->getMessage() ) );
+		}
+	}
 }, 20 );
