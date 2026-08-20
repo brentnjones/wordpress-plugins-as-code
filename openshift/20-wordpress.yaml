@@ -32,6 +32,8 @@ spec:
           volumeMounts:
             - name: wp-html
               mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
             - name: wp-uploads
               mountPath: /var/www/html/wp-content/uploads
       containers:
@@ -48,6 +50,8 @@ spec:
           volumeMounts:
             - name: wp-html
               mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
             - name: wp-uploads
               mountPath: /var/www/html/wp-content/uploads
           resources:
@@ -71,6 +75,9 @@ spec:
             - name: wp-html
               mountPath: /var/www/html
               readOnly: true
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
+              readOnly: true
             - name: wp-uploads
               mountPath: /var/www/html/wp-content/uploads
               readOnly: true
@@ -86,6 +93,13 @@ spec:
 
       volumes:
         - name: wp-html
+          emptyDir: {}
+        # wp-content is its own volume (not just a plain directory inside
+        # wp-html) so it's a genuine mount root and gets fsGroup-writable
+        # permissions from kubelet - a synthetic, runtime-created placeholder
+        # directory (which is what it would be otherwise, since wp-uploads
+        # nests inside it) does not.
+        - name: wp-content
           emptyDir: {}
         - name: wp-uploads
           persistentVolumeClaim:
