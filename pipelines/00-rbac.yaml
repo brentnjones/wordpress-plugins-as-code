@@ -1,0 +1,17 @@
+# The "pipeline" ServiceAccount (auto-created by the OpenShift Pipelines
+# operator) has "edit" but not image-push rights - grant it the same
+# system:image-builder role the "builder" SA (used by BuildConfigs) has,
+# so the buildah task can push to the internal registry.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-image-builder
+  namespace: wordpress-plugins-as-code
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:image-builder
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: wordpress-plugins-as-code

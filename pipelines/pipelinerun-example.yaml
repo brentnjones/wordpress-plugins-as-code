@@ -1,0 +1,24 @@
+# Example PipelineRun. Trigger with:
+#   oc create -f pipelines/pipelinerun-example.yaml -n wordpress-plugins-as-code
+# or generate a fresh one each time with:
+#   tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
+#     --workspace name=shared-workspace,volumeClaimTemplateFile=pipelines/workspace-template.yaml \
+#     --use-param-defaults --showlog
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: wordpress-plugins-as-code-
+  namespace: wordpress-plugins-as-code
+spec:
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  pipelineRef:
+    name: wordpress-plugins-as-code
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi

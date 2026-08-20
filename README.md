@@ -88,6 +88,29 @@ Manifests are under `openshift/` (also usable via `oc apply -k openshift/`).
 
 4. Get the route: `oc get route wordpress -n wordpress-plugins-as-code`
 
+### Building/deploying with OpenShift Pipelines (Tekton)
+
+As an alternative to `oc start-build` + `oc rollout restart`, `pipelines/`
+defines a Tekton `Pipeline` that clones this repo, builds and pushes both
+images with the cluster's `buildah` task, then rolls out the `wordpress`
+Deployment - requires the OpenShift Pipelines operator.
+
+```bash
+oc apply -f pipelines/00-rbac.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
+oc create -f pipelines/pipelinerun-example.yaml -n wordpress-plugins-as-code
+tkn pipelinerun logs -n wordpress-plugins-as-code --last -f
+```
+
+Or trigger a run with overridden params via the `tkn` CLI, e.g. a different
+branch/tag:
+
+```bash
+tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
+  --param git-revision=my-branch \
+  --workspace name=shared-workspace,volumeClaimTemplateFile=<(echo 'spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}') \
+  --use-param-defaults --showlog
+```
+
 ### Pod layout
 
 Each WordPress pod runs three containers sharing an `emptyDir` document root:

@@ -1,0 +1,86 @@
+# Clones this repo, builds both custom images (wordpress php-fpm + nginx)
+# with the cluster's buildah task, pushes them to the internal registry,
+# then restarts the wordpress Deployment to roll out the new images.
+#
+# Reuses the same image names/tags (wordpress-custom:latest,
+# wordpress-nginx:latest) and Deployment (wordpress) already defined in
+# ../openshift/ - this is an alternative way to *build and roll out* those
+# same images, it doesn't replace or duplicate those manifests.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: wordpress-plugins-as-code
+  namespace: wordpress-plugins-as-code
+spec:
+  params:
+    - name: git-url
+      type: string
+      default: https://github.com/brentnjones/wordpress-plugins-as-code.git
+    - name: git-revision
+      type: string
+      default: main
+    - name: image-tag
+      type: string
+      default: latest
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: fetch-source
+      taskRef:
+        resolver: cluster
+        params:
+          - { name: kind, value: task }
+          - { name: name, value: git-clone }
+          - { name: namespace, value: openshift-pipelines }
+      params:
+        - { name: URL, value: $(params.git-url) }
+        - { name: REVISION, value: $(params.git-revision) }
+        - { name: DELETE_EXISTING, value: "true" }
+      workspaces:
+        - { name: output, workspace: shared-workspace }
+
+    - name: build-wordpress-image
+      runAfter: [fetch-source]
+      taskRef:
+        resolver: cluster
+        params:
+          - { name: kind, value: task }
+          - { name: name, value: buildah }
+          - { name: namespace, value: openshift-pipelines }
+      params:
+        - name: IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/wordpress-custom:$(params.image-tag)
+        - { name: DOCKERFILE, value: docker/wordpress/Dockerfile }
+        - { name: CONTEXT, value: . }
+      workspaces:
+        - { name: source, workspace: shared-workspace }
+
+    - name: build-nginx-image
+      runAfter: [fetch-source]
+      taskRef:
+        resolver: cluster
+        params:
+          - { name: kind, value: task }
+          - { name: name, value: buildah }
+          - { name: namespace, value: openshift-pipelines }
+      params:
+        - name: IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/wordpress-nginx:$(params.image-tag)
+        - { name: DOCKERFILE, value: Dockerfile }
+        - { name: CONTEXT, value: docker/nginx }
+      workspaces:
+        - { name: source, workspace: shared-workspace }
+
+    - name: rollout
+      runAfter: [build-wordpress-image, build-nginx-image]
+      taskRef:
+        resolver: cluster
+        params:
+          - { name: kind, value: task }
+          - { name: name, value: openshift-client }
+          - { name: namespace, value: openshift-pipelines }
+      params:
+        - name: SCRIPT
+          value: |
+            oc rollout restart deployment/wordpress -n $(context.pipelineRun.namespace)
+            oc rollout status deployment/wordpress -n $(context.pipelineRun.namespace) --timeout=180s
