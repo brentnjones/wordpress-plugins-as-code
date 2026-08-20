@@ -91,12 +91,35 @@ Manifests are under `openshift/` (also usable via `oc apply -k openshift/`).
 ### Building/deploying with OpenShift Pipelines (Tekton)
 
 As an alternative to `oc start-build` + `oc rollout restart`, `pipelines/`
-defines a Tekton `Pipeline` that clones this repo, builds and pushes both
-images with the cluster's `buildah` task, then rolls out the `wordpress`
-Deployment - requires the OpenShift Pipelines operator.
+defines a Tekton `Pipeline` that clones this repo, runs a SonarQube quality
+gate, builds and pushes both images with the cluster's `buildah` task (only
+if the gate passes), then rolls out the `wordpress` Deployment - requires
+the OpenShift Pipelines operator.
+
+**One-time setup - SonarQube server:**
 
 ```bash
-oc apply -f pipelines/00-rbac.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
+oc apply -f pipelines/02-sonarqube-server.yaml -n wordpress-plugins-as-code
+oc rollout status deployment/sonarqube -n wordpress-plugins-as-code
+
+# Change the default admin/admin password (required before the API is usable):
+POD=$(oc get pods -n wordpress-plugins-as-code -l app=sonarqube -o jsonpath='{.items[0].metadata.name}')
+oc exec "$POD" -n wordpress-plugins-as-code -- curl -s -u admin:admin -X POST \
+  http://localhost:9000/api/users/change_password \
+  --data-urlencode "login=admin" --data-urlencode "previousPassword=admin" \
+  --data-urlencode "password=<a-strong-password-with-a-special-char>"
+
+# Generate a token for the pipeline and store it as a Secret:
+oc exec "$POD" -n wordpress-plugins-as-code -- curl -s -u "admin:<the-password-above>" -X POST \
+  http://localhost:9000/api/user_tokens/generate --data-urlencode "name=tekton-pipeline"
+# copy the "token" value from the response, then:
+oc create secret generic sonarqube-token -n wordpress-plugins-as-code --from-literal=SONAR_TOKEN=<token>
+```
+
+**Build/deploy pipeline:**
+
+```bash
+oc apply -f pipelines/00-rbac.yaml -f pipelines/sonar-scanner-task.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
 oc create -f pipelines/pipelinerun-example.yaml -n wordpress-plugins-as-code
 tkn pipelinerun logs -n wordpress-plugins-as-code --last -f
 ```
@@ -110,6 +133,12 @@ tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
   --workspace name=shared-workspace,volumeClaimTemplateFile=<(echo 'spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}') \
   --use-param-defaults --showlog
 ```
+
+The SonarQube server ([pipelines/02-sonarqube-server.yaml](pipelines/02-sonarqube-server.yaml))
+uses Community Edition with its bundled H2 database - fine for gating this
+pipeline, not intended as a production-grade SonarQube deployment (no HA,
+no backups, embedded DB is eval-only per SonarSource).
+
 
 ### Pod layout
 

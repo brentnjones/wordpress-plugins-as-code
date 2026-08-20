@@ -1,6 +1,7 @@
-# Clones this repo, builds both custom images (wordpress php-fpm + nginx)
-# with the cluster's buildah task, pushes them to the internal registry,
-# then restarts the wordpress Deployment to roll out the new images.
+# Clones this repo, runs a SonarQube quality-gate scan, builds both custom
+# images (wordpress php-fpm + nginx) with the cluster's buildah task - only
+# if the quality gate passes - pushes them to the internal registry, then
+# restarts the wordpress Deployment to roll out the new images.
 #
 # Reuses the same image names/tags (wordpress-custom:latest,
 # wordpress-nginx:latest) and Deployment (wordpress) already defined in
@@ -39,8 +40,17 @@ spec:
       workspaces:
         - { name: output, workspace: shared-workspace }
 
-    - name: build-wordpress-image
+    # Quality gate: build-wordpress-image/build-nginx-image only run if this
+    # passes (sonar-scanner exits non-zero on a failing SonarQube quality gate).
+    - name: sonar-scan
       runAfter: [fetch-source]
+      taskRef:
+        name: sonar-scanner
+      workspaces:
+        - { name: source, workspace: shared-workspace }
+
+    - name: build-wordpress-image
+      runAfter: [sonar-scan]
       taskRef:
         resolver: cluster
         params:
@@ -56,7 +66,7 @@ spec:
         - { name: source, workspace: shared-workspace }
 
     - name: build-nginx-image
-      runAfter: [fetch-source]
+      runAfter: [sonar-scan]
       taskRef:
         resolver: cluster
         params:

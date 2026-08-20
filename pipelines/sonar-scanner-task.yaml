@@ -1,0 +1,39 @@
+# Runs sonar-scanner against the checked-out source and waits for the
+# SonarQube quality gate result - `sonar.qualitygate.wait=true` makes the
+# scanner itself fail (non-zero exit) if the gate doesn't pass, which is
+# enough to block the pipeline without any extra polling logic.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: sonar-scanner
+  namespace: wordpress-plugins-as-code
+spec:
+  params:
+    - name: SONAR_HOST_URL
+      type: string
+      default: http://sonarqube.wordpress-plugins-as-code.svc:9000
+    - name: SONAR_PROJECT_KEY
+      type: string
+      default: wordpress-plugins-as-code
+  workspaces:
+    - name: source
+  steps:
+    - name: scan
+      image: docker.io/sonarsource/sonar-scanner-cli:latest
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: SONAR_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: sonarqube-token
+              key: SONAR_TOKEN
+      script: |
+        #!/bin/sh
+        set -e
+        sonar-scanner \
+          -Dsonar.host.url=$(params.SONAR_HOST_URL) \
+          -Dsonar.projectKey=$(params.SONAR_PROJECT_KEY) \
+          -Dsonar.sources=. \
+          -Dsonar.exclusions=vendor/**,wp-content/plugins/**,wp-content/themes/** \
+          -Dsonar.qualitygate.wait=true \
+          -Dsonar.qualitygate.timeout=300

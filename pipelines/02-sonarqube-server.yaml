@@ -1,0 +1,117 @@
+# SonarQube server used by the pipeline's quality-gate step. Community
+# Edition, embedded H2 database - fine for an internal quality gate, not
+# meant for production-grade SonarQube usage (no HA, no backups).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sonarqube
+  namespace: wordpress-plugins-as-code
+---
+# The official image expects to run as its built-in uid 1000 (unlike our
+# wordpress/nginx images, it isn't built for arbitrary-UID/restricted SCC),
+# so grant it anyuid instead of relying on the group-0 pattern.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sonarqube-anyuid
+  namespace: wordpress-plugins-as-code
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+subjects:
+  - kind: ServiceAccount
+    name: sonarqube
+    namespace: wordpress-plugins-as-code
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data
+  namespace: wordpress-plugins-as-code
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube
+  namespace: wordpress-plugins-as-code
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+    spec:
+      serviceAccountName: sonarqube
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: sonarqube
+          image: docker.io/library/sonarqube:26.8.0.126808-community
+          env:
+            - name: SONAR_ES_BOOTSTRAP_CHECKS_DISABLE
+              value: "true"
+          ports:
+            - containerPort: 9000
+          volumeMounts:
+            - { name: data, mountPath: /opt/sonarqube/data }
+            - { name: extensions, mountPath: /opt/sonarqube/extensions }
+            - { name: logs, mountPath: /opt/sonarqube/logs }
+            - { name: temp, mountPath: /opt/sonarqube/temp }
+          resources:
+            requests: { cpu: 500m, memory: 2Gi }
+            limits: { cpu: "2", memory: 4Gi }
+          readinessProbe:
+            httpGet: { path: /api/system/status, port: 9000 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /api/system/status, port: 9000 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sonarqube-data
+        - { name: extensions, emptyDir: {} }
+        - { name: logs, emptyDir: {} }
+        - { name: temp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube
+  namespace: wordpress-plugins-as-code
+spec:
+  selector:
+    app: sonarqube
+  ports:
+    - port: 9000
+      targetPort: 9000
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: sonarqube
+  namespace: wordpress-plugins-as-code
+spec:
+  to:
+    kind: Service
+    name: sonarqube
+  port:
+    targetPort: 9000
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
