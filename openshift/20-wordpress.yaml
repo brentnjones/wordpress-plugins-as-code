@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: wordpress-plugins-as-code
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      # Populates the shared, ephemeral document-root volume from the image's
+      # baked-in WordPress core + composer-managed plugins/themes before the
+      # app containers start. Re-runs (idempotently) on every pod (re)start,
+      # so a new image with updated plugins takes effect on rollout.
+      initContainers:
+        - name: init-wordpress
+          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-custom:latest
+          command: ["docker-entrypoint.sh", "true"]
+          envFrom:
+            - secretRef:
+                name: wordpress-db-credentials
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mysql
+          volumeMounts:
+            - name: wp-html
+              mountPath: /var/www/html
+            - name: wp-uploads
+              mountPath: /var/www/html/wp-content/uploads
+      containers:
+        - name: wordpress
+          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-custom:latest
+          ports:
+            - containerPort: 9000
+          envFrom:
+            - secretRef:
+                name: wordpress-db-credentials
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mysql
+          volumeMounts:
+            - name: wp-html
+              mountPath: /var/www/html
+            - name: wp-uploads
+              mountPath: /var/www/html/wp-content/uploads
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          readinessProbe:
+            tcpSocket: { port: 9000 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 9000 }
+            initialDelaySeconds: 20
+
+        - name: nginx
+          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-nginx:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: FASTCGI_HOST
+              value: "127.0.0.1"
+          volumeMounts:
+            - name: wp-html
+              mountPath: /var/www/html
+              readOnly: true
+            - name: wp-uploads
+              mountPath: /var/www/html/wp-content/uploads
+              readOnly: true
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          readinessProbe:
+            httpGet: { path: /wp-login.php, port: 8080 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 20
+
+      volumes:
+        - name: wp-html
+          emptyDir: {}
+        - name: wp-uploads
+          persistentVolumeClaim:
+            claimName: wordpress-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: wordpress-plugins-as-code
+spec:
+  selector:
+    app: wordpress
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: wordpress
+  namespace: wordpress-plugins-as-code
+spec:
+  to:
+    kind: Service
+    name: wordpress
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

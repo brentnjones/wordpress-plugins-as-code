@@ -1,0 +1,62 @@
+version: "3.8"
+
+# Local dev/test with Podman (podman-compose up) or Docker Compose.
+# Mirrors the OpenShift topology: nginx + php-fpm share the WordPress
+# document root, MySQL is a separate service, uploads persist in a volume.
+
+services:
+  db:
+    image: docker.io/library/mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  wordpress:
+    build:
+      context: .
+      dockerfile: docker/wordpress/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
+      WORDPRESS_DEBUG: ${WORDPRESS_DEBUG}
+      WORDPRESS_CONFIG_EXTRA: ${WORDPRESS_CONFIG_EXTRA}
+    volumes:
+      - wp_html:/var/www/html
+      - wp_uploads:/var/www/html/wp-content/uploads
+
+  nginx:
+    build:
+      context: docker/nginx
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - wordpress
+    environment:
+      FASTCGI_HOST: ${FASTCGI_HOST}
+    ports:
+      - "8080:8080"
+    volumes:
+      - wp_html:/var/www/html:ro
+      - wp_uploads:/var/www/html/wp-content/uploads:ro
+
+volumes:
+  db_data:
+  wp_html:
+  wp_uploads:

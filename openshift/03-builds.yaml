@@ -1,0 +1,61 @@
+# Builds the two custom images (wordpress, nginx) from this repo's Dockerfiles
+# using OpenShift's internal registry, so you don't need an external registry.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: wordpress-custom
+  namespace: wordpress-plugins-as-code
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: wordpress-custom
+  namespace: wordpress-plugins-as-code
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/brentnjones/wordpress-plugins-as-code.git
+      ref: main
+    contextDir: /
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: docker/wordpress/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: wordpress-custom:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: wordpress-nginx
+  namespace: wordpress-plugins-as-code
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: wordpress-nginx
+  namespace: wordpress-plugins-as-code
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/brentnjones/wordpress-plugins-as-code.git
+      ref: main
+    contextDir: /docker/nginx
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: wordpress-nginx:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange

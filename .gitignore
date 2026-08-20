@@ -1,0 +1,7 @@
+/vendor/
+/wp-content/plugins/*
+/wp-content/themes/*
+!/wp-content/plugins/.gitkeep
+!/wp-content/themes/.gitkeep
+.env
+*.log

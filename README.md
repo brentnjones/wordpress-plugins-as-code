@@ -1,0 +1,126 @@
+# wordpress-plugins-as-code
+
+Run WordPress in containers (Podman locally, OpenShift in production) where
+plugins and themes are declared in `composer.json` and baked into the image
+at build time instead of being managed by hand through wp-admin.
+
+## How it works
+
+- **`composer.json`** declares plugins/themes from [WPackagist](https://wpackagist.org)
+  (the mirror of the official plugin/theme directories) as regular Composer
+  dependencies, using `composer/installers` to place them under
+  `wp-content/plugins/` and `wp-content/themes/`.
+- **`docker/wordpress/Dockerfile`** is a two-stage build:
+  1. `composer install` resolves the plugins/themes.
+  2. They're copied into `/usr/src/wordpress/wp-content/...` on top of the
+     official `wordpress:*-fpm-alpine` image. WordPress's own
+     `docker-entrypoint.sh` already copies `/usr/src/wordpress` into
+     `/var/www/html` on first boot (skipping anything that already exists),
+     so no custom entrypoint is needed - the baked-in plugins just show up.
+  3. The image is hardened to run as an arbitrary non-root UID in group 0
+     (OpenShift's `restricted` SCC): group-writable files, and the php-fpm
+     pool's `user`/`group` directives are stripped so the already-non-root
+     master process doesn't try to `setuid`/`setgid`.
+- **`docker/nginx/`** builds `nginxinc/nginx-unprivileged` (listens on 8080,
+  no root required) with a templated config that proxies `*.php` to php-fpm
+  over FastCGI (`FASTCGI_HOST:9000`).
+- WordPress core files, plugins and themes live on an **ephemeral** shared
+  volume (populated fresh from the image on every pod start) - this is what
+  makes plugins "as code": to add/remove/update a plugin you edit
+  `composer.json`, rebuild the image, and roll out. Only `wp-content/uploads`
+  (user-uploaded media) is persistent, on its own PVC.
+
+## Local development (Podman)
+
+```bash
+cp .env.example .env
+# edit .env with real passwords
+podman-compose up --build
+# or: docker compose up --build
+```
+
+Visit http://localhost:8080 and complete the WordPress install wizard. The
+plugins declared in `composer.json` will already be present under
+Plugins → Installed Plugins (activate as needed).
+
+To add a plugin: add it to `composer.json` (find slugs at
+https://wpackagist.org), then:
+
+```bash
+podman-compose up --build wordpress
+```
+
+## OpenShift
+
+Manifests are under `openshift/` (also usable via `oc apply -k openshift/`).
+
+1. **Build the images in-cluster** using the provided `BuildConfig`s (edit the
+   `git.uri` in `openshift/03-builds.yaml` to point at your fork/repo first),
+   or build/push them yourself and update the `image:` references in
+   `openshift/20-wordpress.yaml`.
+2. **Create real secrets** - do not apply `openshift/01-secrets.yaml` as-is.
+   Instead create them directly, e.g.:
+
+   ```bash
+   oc create secret generic mysql-credentials \
+     --from-literal=MYSQL_DATABASE=wordpress \
+     --from-literal=MYSQL_USER=wordpress \
+     --from-literal=MYSQL_PASSWORD="$(openssl rand -base64 24)" \
+     --from-literal=MYSQL_ROOT_PASSWORD="$(openssl rand -base64 24)" \
+     -n wordpress-plugins-as-code
+
+   oc create secret generic wordpress-db-credentials \
+     --from-literal=WORDPRESS_DB_NAME=wordpress \
+     --from-literal=WORDPRESS_DB_USER=wordpress \
+     --from-literal=WORDPRESS_DB_PASSWORD="$(same password as above)" \
+     -n wordpress-plugins-as-code
+   ```
+
+3. Apply everything else:
+
+   ```bash
+   oc new-project wordpress-plugins-as-code   # or apply 00-namespace.yaml
+   oc apply -k openshift/
+   oc start-build wordpress-custom -n wordpress-plugins-as-code --follow
+   oc start-build wordpress-nginx -n wordpress-plugins-as-code --follow
+   oc rollout restart deployment/wordpress -n wordpress-plugins-as-code
+   ```
+
+4. Get the route: `oc get route wordpress -n wordpress-plugins-as-code`
+
+### Pod layout
+
+Each WordPress pod runs three containers sharing an `emptyDir` document root:
+
+- `init-wordpress` (init container): populates the document root from the
+  image (core + baked-in plugins/themes) and writes `wp-config.php` from the
+  DB secret, then exits.
+- `wordpress`: php-fpm, listening on 9000 (loopback only within the pod).
+- `nginx`: serves static files and proxies `.php` requests to php-fpm on
+  `127.0.0.1:9000`; mounts the document root read-only.
+
+`wp-content/uploads` is a separate `ReadWriteOnce` PVC mounted into all three
+so uploaded media survives restarts/rollouts.
+
+### Plugin management is locked out of wp-admin
+
+`WORDPRESS_CONFIG_EXTRA` (set in `.env.example` and `openshift/01-secrets.yaml`)
+defines `DISALLOW_FILE_MODS` and `DISALLOW_FILE_EDIT`, which removes the
+Plugins/Themes install-update-delete screens and the file editor from
+wp-admin entirely. This is deliberate: the document root is an ephemeral
+volume repopulated from the image on every pod (re)start, so anything
+installed through wp-admin would appear to work and then silently vanish on
+the next rollout. `composer.json` is the only supported way to add/remove
+plugins/themes.
+
+### Notes / things you'll likely want to change
+
+- Pin the WordPress/PHP version in `docker/wordpress/Dockerfile` deliberately
+  rather than relying on a moving tag.
+- Add auth key & salt env vars (generate at
+  https://api.wordpress.org/secret-key/1.1/salt/) to the `wordpress-db-credentials`
+  secret for production.
+- If you need `ReadWriteMany` for multiple WordPress replicas sharing uploads,
+  swap the `wordpress-uploads` PVC's storage class/access mode accordingly.
+- Consider a one-shot `Job` running `wp core install`/`wp plugin activate`
+  (via `wp-cli`) for fully unattended provisioning after first deploy.
