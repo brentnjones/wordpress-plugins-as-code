@@ -139,6 +139,49 @@ uses Community Edition with its bundled H2 database - fine for gating this
 pipeline, not intended as a production-grade SonarQube deployment (no HA,
 no backups, embedded DB is eval-only per SonarSource).
 
+### Auto-triggering the pipeline on commit (Pipelines-as-Code)
+
+Instead of manually creating a `PipelineRun`, [pipelines/pac-repository.yaml](pipelines/pac-repository.yaml)
++ [.tekton/push.yaml](.tekton/push.yaml) wire up OpenShift Pipelines-as-Code
+(PAC) so a push to `main` on GitHub automatically runs the same pipeline
+(sonar-scan -> build -> rollout) via a webhook - no ArgoCD involved, PAC is
+the native trigger mechanism for this.
+
+`.tekton/push.yaml` just references the existing in-cluster `Pipeline`
+(`pipelines/pipeline.yaml`) via `pipelineRef` rather than redefining it, so
+there's one source of truth for the pipeline's steps.
+
+One-time setup (needs your own GitHub token/webhook, not something we can
+script from here):
+
+1. Create a GitHub personal access token for `brentnjones` with `repo` scope
+   (classic) or, for a fine-grained token, `Contents: Read`,
+   `Commit statuses: Read and write`, `Pull requests: Read and write` on
+   this repo - used by PAC to report check results back to GitHub.
+2. Create the secret PAC/the Repository CR expect (run this yourself so the
+   token never has to be shared/pasted anywhere else):
+
+   ```bash
+   WEBHOOK_SECRET=$(openssl rand -hex 20)
+   oc create secret generic pac-github-webhook-secret -n wordpress-plugins-as-code \
+     --from-literal=webhook.secret="$WEBHOOK_SECRET" \
+     --from-literal=provider.token="<your-github-token>"
+   echo "Webhook secret (use in step 3): $WEBHOOK_SECRET"
+   ```
+
+3. On GitHub -> repo Settings -> Webhooks -> Add webhook:
+   - Payload URL: the PAC controller route -
+     `oc get route pipelines-as-code-controller -n openshift-pipelines -o jsonpath='{.spec.host}'`
+     (prefix with `https://`)
+   - Content type: `application/json`
+   - Secret: the `WEBHOOK_SECRET` value printed above
+   - Events: just the `push` event
+4. Apply the Repository CR (safe to re-apply, no secrets in it):
+   `oc apply -f pipelines/pac-repository.yaml -n wordpress-plugins-as-code`
+
+After that, every push to `main` creates a new `PipelineRun` automatically -
+watch it with `tkn pipelinerun logs -n wordpress-plugins-as-code --last -f`
+or `oc get pipelinerun -n wordpress-plugins-as-code`.
 
 ### Pod layout
 

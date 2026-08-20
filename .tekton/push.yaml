@@ -1,0 +1,37 @@
+# Pipelines-as-Code convention: files under .tekton/ are picked up
+# automatically on repo events (per the on-event/on-target-branch
+# annotations below) once the Repository CR + GitHub webhook are set up -
+# see pipelines/pac-repository.yaml and README.md.
+#
+# Reuses the existing in-cluster Pipeline (pipelines/pipeline.yaml) rather
+# than redefining it here, so there's one source of truth for the actual
+# build/scan/deploy steps.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: wordpress-plugins-as-code-push-
+  namespace: wordpress-plugins-as-code
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+    pipelinesascode.tekton.dev/max-keep-runs: "5"
+  labels:
+    pipelinesascode.tekton.dev/repository: wordpress-plugins-as-code
+spec:
+  pipelineRef:
+    name: wordpress-plugins-as-code
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  params:
+    - name: git-url
+      value: "{{ repo_url }}"
+    - name: git-revision
+      value: "{{ revision }}"
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi

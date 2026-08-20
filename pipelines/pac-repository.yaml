@@ -1,0 +1,18 @@
+# Enables push-triggered pipeline runs via OpenShift Pipelines-as-Code (PAC),
+# already installed on this cluster. See README.md "Auto-trigger on commit"
+# section for the one-time GitHub webhook/token setup this depends on.
+apiVersion: pipelinesascode.tekton.dev/v1alpha1
+kind: Repository
+metadata:
+  name: wordpress-plugins-as-code
+  namespace: wordpress-plugins-as-code
+spec:
+  url: "https://github.com/brentnjones/wordpress-plugins-as-code"
+  git_provider:
+    type: github
+    secret:
+      name: pac-github-webhook-secret
+      key: provider.token
+    webhook_secret:
+      name: pac-github-webhook-secret
+      key: webhook.secret
