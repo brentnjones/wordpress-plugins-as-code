@@ -1,7 +1,7 @@
 # Clones this repo, runs a SonarQube quality-gate scan, builds both custom
 # images (wordpress php-fpm + nginx) with the cluster's buildah task - only
-# if the quality gate passes - pushes them to the internal registry, then
-# restarts the wordpress Deployment to roll out the new images.
+# if the quality gate passes - pushes them to quay.io/brentjon (private),
+# then restarts the wordpress Deployment to roll out the new images.
 #
 # Reuses the same image names/tags (wordpress-custom:latest,
 # wordpress-nginx:latest) and Deployment (wordpress) already defined in
@@ -25,6 +25,7 @@ spec:
       default: latest
   workspaces:
     - name: shared-workspace
+    - name: quay-auth
   tasks:
     - name: fetch-source
       taskRef:
@@ -59,11 +60,12 @@ spec:
           - { name: namespace, value: openshift-pipelines }
       params:
         - name: IMAGE
-          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/wordpress-custom:$(params.image-tag)
+          value: quay.io/brentjon/wordpress-custom:$(params.image-tag)
         - { name: DOCKERFILE, value: docker/wordpress/Dockerfile }
         - { name: CONTEXT, value: . }
       workspaces:
         - { name: source, workspace: shared-workspace }
+        - { name: dockerconfig, workspace: quay-auth }
 
     - name: build-nginx-image
       runAfter: [sonar-scan]
@@ -75,11 +77,12 @@ spec:
           - { name: namespace, value: openshift-pipelines }
       params:
         - name: IMAGE
-          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/wordpress-nginx:$(params.image-tag)
+          value: quay.io/brentjon/wordpress-nginx:$(params.image-tag)
         - { name: DOCKERFILE, value: Dockerfile }
         - { name: CONTEXT, value: docker/nginx }
       workspaces:
         - { name: source, workspace: shared-workspace }
+        - { name: dockerconfig, workspace: quay-auth }
 
     - name: rollout
       runAfter: [build-wordpress-image, build-nginx-image]

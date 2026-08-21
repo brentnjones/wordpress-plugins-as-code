@@ -1,5 +1,7 @@
-# Builds the two custom images (wordpress, nginx) from this repo's Dockerfiles
-# using OpenShift's internal registry, so you don't need an external registry.
+# Builds the two custom images (wordpress, nginx) from this repo's
+# Dockerfiles and pushes them to quay.io/brentjon (private repos) using
+# the quay-push-secret Secret. The ImageStreams below are unused - kept in
+# case you want to switch back to the internal registry later.
 apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
@@ -24,11 +26,12 @@ spec:
       dockerfilePath: docker/wordpress/Dockerfile
   output:
     to:
-      kind: ImageStreamTag
-      name: wordpress-custom:latest
+      kind: DockerImage
+      name: quay.io/brentjon/wordpress-custom:latest
+    pushSecret:
+      name: quay-push-secret
   triggers:
     - type: ConfigChange
-    - type: ImageChange
 ---
 apiVersion: image.openshift.io/v1
 kind: ImageStream
@@ -54,8 +57,9 @@ spec:
       dockerfilePath: Dockerfile
   output:
     to:
-      kind: ImageStreamTag
-      name: wordpress-nginx:latest
+      kind: DockerImage
+      name: quay.io/brentjon/wordpress-nginx:latest
+    pushSecret:
+      name: quay-push-secret
   triggers:
     - type: ConfigChange
-    - type: ImageChange

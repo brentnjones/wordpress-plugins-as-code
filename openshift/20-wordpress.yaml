@@ -21,7 +21,7 @@ spec:
       # so a new image with updated plugins takes effect on rollout.
       initContainers:
         - name: init-wordpress
-          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-custom:latest
+          image: quay.io/brentjon/wordpress-custom:latest
           command: ["docker-entrypoint.sh", "true"]
           envFrom:
             - secretRef:
@@ -38,7 +38,7 @@ spec:
               mountPath: /var/www/html/wp-content/uploads
       containers:
         - name: wordpress
-          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-custom:latest
+          image: quay.io/brentjon/wordpress-custom:latest
           ports:
             - containerPort: 9000
           envFrom:
@@ -65,7 +65,7 @@ spec:
             initialDelaySeconds: 20
 
         - name: nginx
-          image: image-registry.openshift-image-registry.svc:5000/wordpress-plugins-as-code/wordpress-nginx:latest
+          image: quay.io/brentjon/wordpress-nginx:latest
           ports:
             - containerPort: 8080
           env:
@@ -93,6 +93,9 @@ spec:
           livenessProbe:
             tcpSocket: { port: 8080 }
             initialDelaySeconds: 20
+
+      imagePullSecrets:
+        - name: quay-push-secret
 
       volumes:
         - name: wp-html

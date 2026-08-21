@@ -22,3 +22,6 @@ spec:
           resources:
             requests:
               storage: 1Gi
+    - name: quay-auth
+      secret:
+        secretName: quay-push-secret

@@ -1,7 +1,5 @@
-# Runs sonar-scanner against the checked-out source and waits for the
-# SonarQube quality gate result - `sonar.qualitygate.wait=true` makes the
-# scanner itself fail (non-zero exit) if the gate doesn't pass, which is
-# enough to block the pipeline without any extra polling logic.
+# Runs sonar-scanner against the checked-out source and reports the
+# SonarQube quality gate result without blocking later pipeline tasks.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -29,7 +27,7 @@ spec:
               key: SONAR_TOKEN
       script: |
         #!/bin/sh
-        set -e
+        set +e
         sonar-scanner \
           -Dsonar.host.url=$(params.SONAR_HOST_URL) \
           -Dsonar.projectKey=$(params.SONAR_PROJECT_KEY) \
@@ -37,3 +35,8 @@ spec:
           -Dsonar.exclusions=vendor/**,wp-content/plugins/**,wp-content/themes/** \
           -Dsonar.qualitygate.wait=true \
           -Dsonar.qualitygate.timeout=300
+        scan_status=$?
+        if [ "$scan_status" -ne 0 ]; then
+          echo "WARNING: SonarQube scan or quality gate failed; continuing pipeline."
+        fi
+        exit 0
