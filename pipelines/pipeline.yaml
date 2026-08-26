@@ -37,9 +37,6 @@ spec:
     - name: db-name
       type: string
       default: wordpress
-    - name: route-host
-      type: string
-      default: ""
   workspaces:
     - name: shared-workspace
     - name: quay-auth
@@ -112,6 +109,5 @@ spec:
         - { name: wordpress-secret-name, value: $(params.wordpress-secret-name) }
         - { name: db-name, value: $(params.db-name) }
         - { name: image-tag, value: $(params.image-tag) }
-        - { name: route-host, value: $(params.route-host) }
       workspaces:
         - { name: source, workspace: shared-workspace }

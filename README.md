@@ -135,7 +135,6 @@ override the namespace, install, and Route parameters:
 tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
   --param target-namespace=wordpress-client-a \
   --param install-name=client-a \
-  --param route-host=client-a.example.com \
   --use-param-defaults --showlog
 ```
 

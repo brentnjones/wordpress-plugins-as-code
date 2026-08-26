@@ -20,9 +20,6 @@ spec:
     - name: image-tag
       type: string
       default: latest
-    - name: route-host
-      type: string
-      default: ""
   steps:
     - name: apply-install
       image: quay.io/openshift/origin-cli:4.18
@@ -61,8 +58,7 @@ spec:
           -p INSTALL_NAME="$(params.install-name)" \
           -p MYSQL_SECRET_NAME="$(params.mysql-secret-name)" \
           -p WORDPRESS_SECRET_NAME="$(params.wordpress-secret-name)" \
-          -p IMAGE_TAG="$(params.image-tag)" \
-          -p ROUTE_HOST="$(params.route-host)" | oc apply -n "$(params.target-namespace)" -f -
+          -p IMAGE_TAG="$(params.image-tag)" | oc apply -n "$(params.target-namespace)" -f -
         oc rollout status deployment/$(params.install-name)-mysql -n "$(params.target-namespace)" --timeout=180s
         oc rollout status deployment/$(params.install-name)-wordpress -n "$(params.target-namespace)" --timeout=180s
       workingDir: $(workspaces.source.path)

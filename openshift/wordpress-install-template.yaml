@@ -14,8 +14,6 @@ parameters:
     required: true
   - name: IMAGE_TAG
     value: latest
-  - name: ROUTE_HOST
-    value: ""
 objects:
   - apiVersion: v1
     kind: PersistentVolumeClaim
@@ -181,7 +179,6 @@ objects:
     metadata:
       name: ${INSTALL_NAME}-wordpress
     spec:
-      host: ${ROUTE_HOST}
       to:
         kind: Service
         name: ${INSTALL_NAME}-wordpress
