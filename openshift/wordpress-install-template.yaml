@@ -1,0 +1,192 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: wordpress-install
+parameters:
+  - name: INSTALL_NAME
+    description: Lowercase name used as the resource prefix
+    required: true
+  - name: MYSQL_SECRET_NAME
+    description: Secret containing MYSQL_* values
+    required: true
+  - name: WORDPRESS_SECRET_NAME
+    description: Secret containing WORDPRESS_DB_* values
+    required: true
+  - name: IMAGE_TAG
+    value: latest
+  - name: ROUTE_HOST
+    value: ""
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${INSTALL_NAME}-mysql-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${INSTALL_NAME}-wordpress-uploads
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ${INSTALL_NAME}-mysql
+    spec:
+      replicas: 1
+      strategy:
+        type: Recreate
+      selector:
+        matchLabels:
+          app: ${INSTALL_NAME}-mysql
+      template:
+        metadata:
+          labels:
+            app: ${INSTALL_NAME}-mysql
+        spec:
+          containers:
+            - name: mysql
+              image: registry.redhat.io/rhel9/mysql-80:latest
+              ports:
+                - containerPort: 3306
+              envFrom:
+                - secretRef:
+                    name: ${MYSQL_SECRET_NAME}
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/mysql/data
+              readinessProbe:
+                exec:
+                  command: ["/bin/sh", "-c", "mysqladmin ping -h 127.0.0.1 -u root -p$MYSQL_ROOT_PASSWORD"]
+                initialDelaySeconds: 10
+                periodSeconds: 10
+              livenessProbe:
+                tcpSocket:
+                  port: 3306
+                initialDelaySeconds: 30
+                periodSeconds: 20
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: ${INSTALL_NAME}-mysql-data
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${INSTALL_NAME}-mysql
+    spec:
+      selector:
+        app: ${INSTALL_NAME}-mysql
+      ports:
+        - port: 3306
+          targetPort: 3306
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ${INSTALL_NAME}-wordpress
+    spec:
+      replicas: 1
+      strategy:
+        type: Recreate
+      selector:
+        matchLabels:
+          app: ${INSTALL_NAME}-wordpress
+      template:
+        metadata:
+          labels:
+            app: ${INSTALL_NAME}-wordpress
+        spec:
+          initContainers:
+            - name: init-wordpress
+              image: quay.io/brentjon/wordpress-custom:${IMAGE_TAG}
+              command: ["docker-entrypoint.sh", "true"]
+              envFrom:
+                - secretRef:
+                    name: ${WORDPRESS_SECRET_NAME}
+              env:
+                - name: WORDPRESS_DB_HOST
+                  value: ${INSTALL_NAME}-mysql
+              volumeMounts:
+                - { name: wp-html, mountPath: /var/www/html }
+                - { name: wp-content, mountPath: /var/www/html/wp-content }
+                - { name: wp-uploads, mountPath: /var/www/html/wp-content/uploads }
+          containers:
+            - name: wordpress
+              image: quay.io/brentjon/wordpress-custom:${IMAGE_TAG}
+              ports:
+                - containerPort: 9000
+              envFrom:
+                - secretRef:
+                    name: ${WORDPRESS_SECRET_NAME}
+              env:
+                - name: WORDPRESS_DB_HOST
+                  value: ${INSTALL_NAME}-mysql
+              volumeMounts:
+                - { name: wp-html, mountPath: /var/www/html }
+                - { name: wp-content, mountPath: /var/www/html/wp-content }
+                - { name: wp-uploads, mountPath: /var/www/html/wp-content/uploads }
+              readinessProbe:
+                tcpSocket: { port: 9000 }
+                initialDelaySeconds: 5
+              livenessProbe:
+                tcpSocket: { port: 9000 }
+                initialDelaySeconds: 20
+            - name: nginx
+              image: quay.io/brentjon/wordpress-nginx:${IMAGE_TAG}
+              ports:
+                - containerPort: 8080
+              env:
+                - name: FASTCGI_HOST
+                  value: 127.0.0.1
+              volumeMounts:
+                - { name: wp-html, mountPath: /var/www/html, readOnly: true }
+                - { name: wp-content, mountPath: /var/www/html/wp-content, readOnly: true }
+                - { name: wp-uploads, mountPath: /var/www/html/wp-content/uploads, readOnly: true }
+              readinessProbe:
+                httpGet: { path: /wp-login.php, port: 8080 }
+                initialDelaySeconds: 5
+                timeoutSeconds: 10
+                periodSeconds: 10
+                failureThreshold: 3
+              livenessProbe:
+                tcpSocket: { port: 8080 }
+                initialDelaySeconds: 20
+          imagePullSecrets:
+            - name: quay-push-secret
+          volumes:
+            - { name: wp-html, emptyDir: {} }
+            - { name: wp-content, emptyDir: {} }
+            - name: wp-uploads
+              persistentVolumeClaim:
+                claimName: ${INSTALL_NAME}-wordpress-uploads
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${INSTALL_NAME}-wordpress
+    spec:
+      selector:
+        app: ${INSTALL_NAME}-wordpress
+      ports:
+        - name: http
+          port: 8080
+          targetPort: 8080
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: ${INSTALL_NAME}-wordpress
+    spec:
+      host: ${ROUTE_HOST}
+      to:
+        kind: Service
+        name: ${INSTALL_NAME}-wordpress
+      port:
+        targetPort: http
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect

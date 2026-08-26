@@ -14,6 +14,15 @@ spec:
     serviceAccountName: pipeline
   pipelineRef:
     name: wordpress-plugins-as-code
+  params:
+    - name: target-namespace
+      value: wordpress-plugins-as-code
+    - name: install-name
+      value: wordpress
+    - name: mysql-secret-name
+      value: mysql-credentials
+    - name: wordpress-secret-name
+      value: wordpress-db-credentials
   workspaces:
     - name: shared-workspace
       volumeClaimTemplate:

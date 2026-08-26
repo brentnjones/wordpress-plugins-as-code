@@ -119,10 +119,33 @@ oc create secret generic sonarqube-token -n wordpress-plugins-as-code --from-lit
 **Build/deploy pipeline:**
 
 ```bash
-oc apply -f pipelines/00-rbac.yaml -f pipelines/sonar-scanner-task.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
+oc apply -f pipelines/00-rbac.yaml -f pipelines/sonar-scanner-task.yaml -f pipelines/provision-wordpress-task.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
 oc create -f pipelines/pipelinerun-example.yaml -n wordpress-plugins-as-code
 tkn pipelinerun logs -n wordpress-plugins-as-code --last -f
 ```
+
+The PipelineRun creates the target namespace, then provisions the MySQL
+Deployment, WordPress Deployment, PVCs, Service, and Route for the requested
+install. For a new install, the pipeline creates random database credentials
+and stores them in the two named Secrets in the target namespace. Existing
+credential Secrets are preserved on reruns. To create an isolated install,
+override the namespace, install, and Route parameters:
+
+```bash
+tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
+  --param target-namespace=wordpress-client-a \
+  --param install-name=client-a \
+  --param route-host=client-a.example.com \
+  --use-param-defaults --showlog
+```
+
+The generated credentials are available to administrators with `oc get
+secret`; do not print them in build logs. Use different Secret names when an
+install needs separately managed credentials. Install names and namespaces
+must be lowercase DNS-compatible values. The
+pipeline ServiceAccount has cluster-wide permission to create the namespace
+and generated application resources, so keep the target namespace parameter
+restricted to trusted users.
 
 Or trigger a run with overridden params via the `tkn` CLI, e.g. a different
 branch/tag:

@@ -1,0 +1,70 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: provision-wordpress
+  namespace: wordpress-plugins-as-code
+spec:
+  params:
+    - name: target-namespace
+      type: string
+      default: wordpress-plugins-as-code
+    - name: install-name
+      type: string
+    - name: mysql-secret-name
+      type: string
+    - name: wordpress-secret-name
+      type: string
+    - name: db-name
+      type: string
+      default: wordpress
+    - name: image-tag
+      type: string
+      default: latest
+    - name: route-host
+      type: string
+      default: ""
+  steps:
+    - name: apply-install
+      image: quay.io/openshift/origin-cli:4.18
+      script: |
+        #!/bin/sh
+        set -eu
+        printf '%s\n' \
+          'apiVersion: v1' \
+          'kind: Namespace' \
+          'metadata:' \
+          '  name: $(params.target-namespace)' | oc apply -f -
+        mysql_secret="$(params.mysql-secret-name)"
+        wordpress_secret="$(params.wordpress-secret-name)"
+        if oc get secret "$mysql_secret" -n "$(params.target-namespace)" >/dev/null 2>&1 && \
+           oc get secret "$wordpress_secret" -n "$(params.target-namespace)" >/dev/null 2>&1; then
+          :
+        elif oc get secret "$mysql_secret" -n "$(params.target-namespace)" >/dev/null 2>&1 || \
+             oc get secret "$wordpress_secret" -n "$(params.target-namespace)" >/dev/null 2>&1; then
+          echo "one install credential Secret exists but the other is missing" >&2
+          exit 1
+        else
+          db_user="wp_$(openssl rand -hex 8)"
+          db_password="$(openssl rand -hex 24)"
+          root_password="$(openssl rand -hex 24)"
+          oc create secret generic "$mysql_secret" -n "$(params.target-namespace)" \
+            --from-literal=MYSQL_DATABASE="$(params.db-name)" \
+            --from-literal=MYSQL_USER="$db_user" \
+            --from-literal=MYSQL_PASSWORD="$db_password" \
+            --from-literal=MYSQL_ROOT_PASSWORD="$root_password"
+          oc create secret generic "$wordpress_secret" -n "$(params.target-namespace)" \
+            --from-literal=WORDPRESS_DB_NAME="$(params.db-name)" \
+            --from-literal=WORDPRESS_DB_USER="$db_user" \
+            --from-literal=WORDPRESS_DB_PASSWORD="$db_password"
+        fi
+        oc process -f /workspace/source/openshift/wordpress-install-template.yaml \
+          -p INSTALL_NAME="$(params.install-name)" \
+          -p MYSQL_SECRET_NAME="$(params.mysql-secret-name)" \
+          -p WORDPRESS_SECRET_NAME="$(params.wordpress-secret-name)" \
+          -p IMAGE_TAG="$(params.image-tag)" \
+          -p ROUTE_HOST="$(params.route-host)" | oc apply -n "$(params.target-namespace)" -f -
+        oc rollout status deployment/$(params.install-name)-mysql -n "$(params.target-namespace)" --timeout=180s
+        oc rollout status deployment/$(params.install-name)-wordpress -n "$(params.target-namespace)" --timeout=180s
+      workingDir: $(workspaces.source.path)
+  workspaces:
+    - name: source
