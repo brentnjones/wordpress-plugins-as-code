@@ -19,6 +19,8 @@ spec:
       value: wordpress-plugins-as-code
     - name: install-name
       value: wordpress
+    - name: composer-path
+      value: .
     - name: mysql-secret-name
       value: mysql-credentials
     - name: wordpress-secret-name

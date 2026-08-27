@@ -32,7 +32,7 @@ rules:
     verbs: ["get", "create"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "create", "patch", "update"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
   - apiGroups: ["route.openshift.io"]
     resources: ["routes"]
     verbs: ["get", "create", "patch", "update"]

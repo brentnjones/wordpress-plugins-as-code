@@ -34,9 +34,15 @@ spec:
     - name: wordpress-secret-name
       type: string
       default: wordpress-db-credentials
+    - name: registry-secret-name
+      type: string
+      default: quay-push-secret
     - name: db-name
       type: string
       default: wordpress
+    - name: composer-path
+      type: string
+      default: .
   workspaces:
     - name: shared-workspace
     - name: quay-auth
@@ -55,10 +61,19 @@ spec:
       workspaces:
         - { name: output, workspace: shared-workspace }
 
+    - name: select-composer
+      runAfter: [fetch-source]
+      taskRef:
+        name: select-composer
+      params:
+        - { name: composer-path, value: $(params.composer-path) }
+      workspaces:
+        - { name: source, workspace: shared-workspace }
+
     # Quality gate: build-wordpress-image/build-nginx-image only run if this
     # passes (sonar-scanner exits non-zero on a failing SonarQube quality gate).
     - name: sonar-scan
-      runAfter: [fetch-source]
+      runAfter: [select-composer]
       taskRef:
         name: sonar-scanner
       workspaces:
@@ -107,6 +122,7 @@ spec:
         - { name: install-name, value: $(params.install-name) }
         - { name: mysql-secret-name, value: $(params.mysql-secret-name) }
         - { name: wordpress-secret-name, value: $(params.wordpress-secret-name) }
+        - { name: registry-secret-name, value: $(params.registry-secret-name) }
         - { name: db-name, value: $(params.db-name) }
         - { name: image-tag, value: $(params.image-tag) }
       workspaces:

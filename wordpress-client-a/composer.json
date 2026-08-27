@@ -1,0 +1,34 @@
+{
+    "name": "example/wordpress-plugins-as-code",
+    "description": "Declares WordPress plugins/themes as code so they can be baked into the container image at build time.",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://wpackagist.org"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "composer/installers": "^2.3",
+        "wpackagist-plugin/wordpress-seo": "*",
+        "wpackagist-plugin/wordfence": "*",
+        "wpackagist-plugin/redis-cache": "*",
+        "wpackagist-theme/twentytwentyfour": "*"
+    },
+    "extra": {
+        "installer-paths": {
+            "wp-content/plugins/{$name}/": ["type:wordpress-plugin"],
+            "wp-content/themes/{$name}/": ["type:wordpress-theme"]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

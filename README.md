@@ -119,7 +119,7 @@ oc create secret generic sonarqube-token -n wordpress-plugins-as-code --from-lit
 **Build/deploy pipeline:**
 
 ```bash
-oc apply -f pipelines/00-rbac.yaml -f pipelines/sonar-scanner-task.yaml -f pipelines/provision-wordpress-task.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
+oc apply -f pipelines/00-rbac.yaml -f pipelines/sonar-scanner-task.yaml -f pipelines/select-composer-task.yaml -f pipelines/provision-wordpress-task.yaml -f pipelines/pipeline.yaml -n wordpress-plugins-as-code
 oc create -f pipelines/pipelinerun-example.yaml -n wordpress-plugins-as-code
 tkn pipelinerun logs -n wordpress-plugins-as-code --last -f
 ```
@@ -135,6 +135,7 @@ override the namespace, install, and Route parameters:
 tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
   --param target-namespace=wordpress-client-a \
   --param install-name=client-a \
+  --param composer-path=wordpress-client-a \
   --use-param-defaults --showlog
 ```
 
@@ -145,6 +146,11 @@ must be lowercase DNS-compatible values. The
 pipeline ServiceAccount has cluster-wide permission to create the namespace
 and generated application resources, so keep the target namespace parameter
 restricted to trusted users.
+
+The `composer-path` parameter defaults to `.` and uses the repository-root
+`composer.json`. If a client-specific directory contains `composer.json`, the
+pipeline uses it instead; if it does not exist, the root file remains the
+default. An optional `composer.lock` in that directory is used as well.
 
 Or trigger a run with overridden params via the `tkn` CLI, e.g. a different
 branch/tag:

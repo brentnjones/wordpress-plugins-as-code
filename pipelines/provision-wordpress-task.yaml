@@ -14,6 +14,9 @@ spec:
       type: string
     - name: wordpress-secret-name
       type: string
+    - name: registry-secret-name
+      type: string
+      default: quay-push-secret
     - name: db-name
       type: string
       default: wordpress
@@ -31,6 +34,14 @@ spec:
           'kind: Namespace' \
           'metadata:' \
           '  name: $(params.target-namespace)' | oc apply -f -
+        registry_secret="$(params.registry-secret-name)"
+        oc get secret "$registry_secret" -n "$(context.pipelineRun.namespace)" \
+          -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/dockerconfig.json
+        oc create secret generic "$registry_secret" \
+          -n "$(params.target-namespace)" \
+          --type=kubernetes.io/dockerconfigjson \
+          --from-file=.dockerconfigjson=/tmp/dockerconfig.json \
+          --dry-run=client -o yaml | oc apply -n "$(params.target-namespace)" -f -
         mysql_secret="$(params.mysql-secret-name)"
         wordpress_secret="$(params.wordpress-secret-name)"
         if oc get secret "$mysql_secret" -n "$(params.target-namespace)" >/dev/null 2>&1 && \
