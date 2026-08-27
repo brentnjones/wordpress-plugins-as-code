@@ -13,6 +13,9 @@ metadata:
   namespace: wordpress-plugins-as-code
 spec:
   params:
+    - name: source-namespace
+      type: string
+      default: wordpress-plugins-as-code
     - name: git-url
       type: string
       default: https://github.com/brentnjones/wordpress-plugins-as-code.git
@@ -118,6 +121,7 @@ spec:
       taskRef:
         name: provision-wordpress
       params:
+        - { name: source-namespace, value: $(params.source-namespace) }
         - { name: target-namespace, value: $(params.target-namespace) }
         - { name: install-name, value: $(params.install-name) }
         - { name: mysql-secret-name, value: $(params.mysql-secret-name) }

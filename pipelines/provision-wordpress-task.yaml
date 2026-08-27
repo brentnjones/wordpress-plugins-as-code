@@ -5,6 +5,9 @@ metadata:
   namespace: wordpress-plugins-as-code
 spec:
   params:
+    - name: source-namespace
+      type: string
+      default: wordpress-plugins-as-code
     - name: target-namespace
       type: string
       default: wordpress-plugins-as-code
@@ -35,7 +38,7 @@ spec:
           'metadata:' \
           '  name: $(params.target-namespace)' | oc apply -f -
         registry_secret="$(params.registry-secret-name)"
-        oc get secret "$registry_secret" -n "$(context.pipelineRun.namespace)" \
+        oc get secret "$registry_secret" -n "$(params.source-namespace)" \
           -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/dockerconfig.json
         oc create secret generic "$registry_secret" \
           -n "$(params.target-namespace)" \
