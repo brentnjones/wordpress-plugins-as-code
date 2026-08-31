@@ -49,9 +49,11 @@ const createPipelineRunAction = () =>
         serviceAccountName: z.string().min(1),
         params: z.record(z.string()),
         registrySecretName: z.string().min(1),
+        consoleUrl: z.string().url(),
       }),
       output: z => z.object({
         pipelineRunName: z.string(),
+        pipelineRunUrl: z.string().url(),
       }),
     },
     async handler(ctx) {
@@ -91,6 +93,8 @@ const createPipelineRunAction = () =>
         throw new Error('OpenShift did not return the created PipelineRun name');
       }
       ctx.output('pipelineRunName', pipelineRunName);
+      const pipelineRunUrl = `${input.consoleUrl}/k8s/ns/${input.namespace}/tekton.dev~v1~PipelineRun/${pipelineRunName}`;
+      ctx.output('pipelineRunUrl', pipelineRunUrl);
       ctx.logger.info(`Created PipelineRun ${pipelineRunName} in ${input.namespace}`);
     },
   });

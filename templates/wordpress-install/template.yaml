@@ -51,6 +51,7 @@ spec:
         pipelineName: wordpress-plugins-as-code
         serviceAccountName: pipeline
         registrySecretName: quay-push-secret
+        consoleUrl: https://console-openshift-console.apps.xps.planenotsimple.com
         params:
           source-namespace: wordpress-plugins-as-code
           git-url: https://github.com/brentnjones/wordpress-plugins-as-code.git
@@ -63,3 +64,8 @@ spec:
           registry-secret-name: quay-push-secret
           db-name: wordpress
           composer-path: ${{ parameters.composerPath }}
+
+  output:
+    links:
+      - title: PipelineRun in OpenShift Console
+        url: ${{ steps['create-pipeline-run'].output.pipelineRunUrl }}
