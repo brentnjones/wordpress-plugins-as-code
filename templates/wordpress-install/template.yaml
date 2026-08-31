@@ -45,7 +45,7 @@ spec:
   steps:
     - id: create-pipeline-run
       action: openshift:pipeline-run
-      action: openshift:pipeline-run
+      input:
         namespace: wordpress-plugins-as-code
         generateName: ${{ parameters.clientName }}-
         pipelineName: wordpress-plugins-as-code
