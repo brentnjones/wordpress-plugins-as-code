@@ -2,12 +2,9 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-var fs = require('node:fs');
 var backendPluginApi = require('@backstage/backend-plugin-api');
 var pluginScaffolderNode = require('@backstage/plugin-scaffolder-node');
 var k8s = require('@kubernetes/client-node');
-
-function _interopDefaultCompat (e) { return e && typeof e === 'object' && 'default' in e ? e : { default: e }; }
 
 function _interopNamespaceCompat(e) {
   if (e && typeof e === 'object' && 'default' in e) return e;
@@ -27,7 +24,6 @@ function _interopNamespaceCompat(e) {
   return Object.freeze(n);
 }
 
-var fs__default = /*#__PURE__*/_interopDefaultCompat(fs);
 var k8s__namespace = /*#__PURE__*/_interopNamespaceCompat(k8s);
 
 const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction({
@@ -54,11 +50,14 @@ const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction(
       clusters: [{
         name: "inCluster",
         server,
-        caData: fs__default.default.readFileSync(`${serviceAccountPath}/ca.crt`, "base64")
+        caFile: `${serviceAccountPath}/ca.crt`
       }],
       users: [{
         name: "inClusterUser",
-        token: fs__default.default.readFileSync(`${serviceAccountPath}/token`, "utf8").trim()
+        authProvider: {
+          name: "tokenFile",
+          config: { tokenFile: `${serviceAccountPath}/token` }
+        }
       }],
       contexts: [{
         name: "inClusterContext",

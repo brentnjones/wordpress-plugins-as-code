@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import {
   createTemplateAction,
@@ -31,11 +30,14 @@ const createPipelineRunAction = () =>
         clusters: [{
           name: 'inCluster',
           server,
-          caData: fs.readFileSync(`${serviceAccountPath}/ca.crt`, 'base64'),
+          caFile: `${serviceAccountPath}/ca.crt`,
         }],
         users: [{
           name: 'inClusterUser',
-          token: fs.readFileSync(`${serviceAccountPath}/token`, 'utf8').trim(),
+          authProvider: {
+            name: 'tokenFile',
+            config: { tokenFile: `${serviceAccountPath}/token` },
+          },
         }],
         contexts: [{
           name: 'inClusterContext',
