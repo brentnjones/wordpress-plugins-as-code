@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import {
   createTemplateAction,
@@ -24,7 +25,25 @@ const createPipelineRunAction = () =>
     },
     async handler(ctx) {
       const kubeConfig = new k8s.KubeConfig();
-      kubeConfig.loadFromCluster();
+      const serviceAccountPath = '/var/run/secrets/kubernetes.io/serviceaccount';
+      const server = `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? '443'}`;
+      kubeConfig.loadFromOptions({
+        clusters: [{
+          name: 'inCluster',
+          server,
+          caData: fs.readFileSync(`${serviceAccountPath}/ca.crt`, 'base64'),
+        }],
+        users: [{
+          name: 'inClusterUser',
+          token: fs.readFileSync(`${serviceAccountPath}/token`, 'utf8').trim(),
+        }],
+        contexts: [{
+          name: 'inClusterContext',
+          cluster: 'inCluster',
+          user: 'inClusterUser',
+        }],
+        currentContext: 'inClusterContext',
+      });
       const customObjects = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
       const input = ctx.input;
       const pipelineRun: Record<string, unknown> = {
