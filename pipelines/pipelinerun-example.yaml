@@ -7,7 +7,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: wordpress-plugins-as-code-
+  name: wordpress-pipelinerun
   namespace: wordpress-plugins-as-code
 spec:
   taskRunTemplate:
