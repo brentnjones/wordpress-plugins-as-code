@@ -44,7 +44,7 @@ const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction(
   },
   async handler(ctx) {
     const kubeConfig = new k8s__namespace.KubeConfig();
-    kubeConfig.loadFromDefault();
+    kubeConfig.loadFromCluster();
     const customObjects = kubeConfig.makeApiClient(k8s__namespace.CustomObjectsApi);
     const input = ctx.input;
     const pipelineRun = {

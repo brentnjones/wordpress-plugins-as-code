@@ -24,7 +24,7 @@ const createPipelineRunAction = () =>
     },
     async handler(ctx) {
       const kubeConfig = new k8s.KubeConfig();
-      kubeConfig.loadFromDefault();
+      kubeConfig.loadFromCluster();
       const customObjects = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
       const input = ctx.input;
       const pipelineRun: Record<string, unknown> = {

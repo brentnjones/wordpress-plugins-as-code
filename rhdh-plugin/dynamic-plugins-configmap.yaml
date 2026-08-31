@@ -18,5 +18,5 @@ data:
       disabled: false
     - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes
       disabled: false
-    - package: oci://default-route-openshift-image-registry.apps.xps.planenotsimple.com/wordpress-plugins-as-code/rhdh-scaffolder-backend-module-openshift:0.1.1!brentjon-rhdh-scaffolder-backend-module-openshift
+    - package: oci://default-route-openshift-image-registry.apps.xps.planenotsimple.com/wordpress-plugins-as-code/rhdh-scaffolder-backend-module-openshift:0.1.2!brentjon-rhdh-scaffolder-backend-module-openshift
       disabled: false

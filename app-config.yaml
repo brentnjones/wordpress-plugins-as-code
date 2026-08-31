@@ -14,7 +14,7 @@ data:
         origin: https://backstage-developer-hub-rhdh-operator.apps.xps.planenotsimple.com
       reading:
         allow:
-          - raw.githubusercontent.com
+          - host: raw.githubusercontent.com
 
     auth:
       environment: production
