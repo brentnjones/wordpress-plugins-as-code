@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-dynamic-plugins-developer-hub
+  namespace: rhdh-operator
+data:
+  dynamic-plugins.yaml: |
+    includes:
+    - dynamic-plugins.default.yaml
+    plugins:
+    - package: oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-lightspeed:{{inherit}}
+      disabled: false
+    - package: oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-lightspeed-backend:{{inherit}}
+      disabled: false
+    - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic
+      disabled: false
+    - package: ./dynamic-plugins/dist/backstage-community-plugin-scaffolder-backend-module-kubernetes-dynamic
+      disabled: false
+    - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes
+      disabled: false
+    - package: oci://default-route-openshift-image-registry.apps.xps.planenotsimple.com/wordpress-plugins-as-code/rhdh-scaffolder-backend-module-openshift:0.1.1!brentjon-rhdh-scaffolder-backend-module-openshift
+      disabled: false

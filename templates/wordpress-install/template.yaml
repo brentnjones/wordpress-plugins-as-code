@@ -44,56 +44,22 @@ spec:
 
   steps:
     - id: create-pipeline-run
-      name: Create Tekton PipelineRun
-      action: kubernetes:apply
-      input:
-        manifest: |
-          apiVersion: tekton.dev/v1
-          kind: PipelineRun
-          metadata:
-            generateName: ${{ parameters.clientName }}-
-            namespace: ${{ parameters.targetNamespace }}
-          spec:
-            serviceAccountName: pipeline
-            pipelineRef:
-              name: wordpress-plugins-as-code
-            params:
-              - name: source-namespace
-                value: wordpress-plugins-as-code
-              - name: git-url
-                value: https://github.com/brentnjones/wordpress-plugins-as-code.git
-              - name: git-revision
-                value: ${{ parameters.gitRevision }}
-              - name: image-tag
-                value: ${{ parameters.imageTag }}
-              - name: install-name
-                value: ${{ parameters.clientName }}
-              - name: target-namespace
-                value: ${{ parameters.targetNamespace }}
-              - name: mysql-secret-name
-                value: mysql-credentials
-              - name: wordpress-secret-name
-                value: wordpress-db-credentials
-              - name: registry-secret-name
-                value: quay-push-secret
-              - name: db-name
-                value: wordpress
-              - name: composer-path
-                value: ${{ parameters.composerPath }}
-            workspaces:
-              - name: shared-workspace
-                volumeClaimTemplate:
-                  spec:
-                    accessModes:
-                      - ReadWriteOnce
-                    resources:
-                      requests:
-                        storage: 1Gi
-              - name: quay-auth
-                secret:
-                  secretName: quay-push-secret
-
-  output:
-    links:
-      - title: PipelineRun
-        url: ${{ steps['create-pipeline-run'].output.entityRef }}
+      action: openshift:pipeline-run
+      action: openshift:pipeline-run
+        namespace: wordpress-plugins-as-code
+        generateName: ${{ parameters.clientName }}-
+        pipelineName: wordpress-plugins-as-code
+        serviceAccountName: pipeline
+        registrySecretName: quay-push-secret
+        params:
+          source-namespace: wordpress-plugins-as-code
+          git-url: https://github.com/brentnjones/wordpress-plugins-as-code.git
+          git-revision: ${{ parameters.gitRevision }}
+          image-tag: ${{ parameters.imageTag }}
+          install-name: ${{ parameters.clientName }}
+          target-namespace: ${{ parameters.targetNamespace }}
+          mysql-secret-name: mysql-credentials
+          wordpress-secret-name: wordpress-db-credentials
+          registry-secret-name: quay-push-secret
+          db-name: wordpress
+          composer-path: ${{ parameters.composerPath }}
