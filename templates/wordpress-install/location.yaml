@@ -4,4 +4,4 @@ metadata:
   name: wordpress-install-template
 spec:
   type: url
-  target: https://github.com/brentnjones/wordpress-plugins-as-code/blob/main/templates/wordpress-install/template.yaml
+  target: https://raw.githubusercontent.com/brentnjones/wordpress-plugins-as-code/main/templates/wordpress-install/template.yaml

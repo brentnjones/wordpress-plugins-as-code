@@ -30,6 +30,10 @@ data:
           target: /app-config/users.yaml
           rules:
             - allow: [User, Group]
+        - type: url
+          target: https://raw.githubusercontent.com/brentnjones/wordpress-plugins-as-code/main/templates/wordpress-install/template.yaml
+          rules:
+            - allow: [Template]
 
     kubernetes:
       clusterLocatorMethods: []
