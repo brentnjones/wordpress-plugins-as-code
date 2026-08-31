@@ -1,0 +1,7 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: wordpress-install-template
+spec:
+  type: url
+  target: https://github.com/brentnjones/wordpress-plugins-as-code/blob/main/templates/wordpress-install/template.yaml

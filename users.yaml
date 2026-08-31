@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhdh-catalog-users
+  namespace: rhdh-operator
+data:
+  users.yaml: |
+    apiVersion: backstage.io/v1alpha1
+    kind: User
+    metadata:
+      name: brentjon
+    spec:
+      profile:
+        displayName: Brent Jones
+        email: brentnjones@gmail.com
+      memberOf: [guests]

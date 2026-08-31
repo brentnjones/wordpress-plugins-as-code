@@ -139,6 +139,33 @@ tkn pipeline start wordpress-plugins-as-code -n wordpress-plugins-as-code \
   --use-param-defaults --showlog
 ```
 
+Example:
+```bash
+tkn pipeline start wordpress-plugins-as-code \
+  -n wordpress-plugins-as-code \
+  --param target-namespace=wordpress-client-a \
+  --param install-name=client-a \
+  --param composer-path=wordpress-client-a \
+  --workspace name=shared-workspace,volumeClaimTemplateFile=pipelines/workspace-template.yaml \
+  --workspace name=quay-auth,secret=quay-push-secret \
+  --use-param-defaults \
+  --showlog
+```
+
+The workspace options supply the two workspaces required by the Pipeline:
+
+- `shared-workspace` uses `pipelines/workspace-template.yaml` to create a
+  temporary 1Gi PVC. It holds the cloned repository and is shared by the
+  Composer selection, SonarQube, build, and provisioning tasks.
+- `quay-auth` mounts the `quay-push-secret` Secret. It supplies Quay
+  credentials to Buildah so the images can be pushed. The provisioning task
+  also copies this registry Secret into the target namespace so the WordPress
+  pod can pull the images.
+
+Run the command from the repository root, or provide an absolute path to the
+workspace template. The `quay-push-secret` Secret must exist in the pipeline
+namespace (`wordpress-plugins-as-code`) before starting the run.
+
 The generated credentials are available to administrators with `oc get
 secret`; do not print them in build logs. Use different Secret names when an
 install needs separately managed credentials. Install names and namespaces
