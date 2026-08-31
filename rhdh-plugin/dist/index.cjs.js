@@ -2,30 +2,47 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
+var fs = require('node:fs');
+var https = require('node:https');
 var backendPluginApi = require('@backstage/backend-plugin-api');
 var pluginScaffolderNode = require('@backstage/plugin-scaffolder-node');
-var k8s = require('@kubernetes/client-node');
 
-function _interopNamespaceCompat(e) {
-  if (e && typeof e === 'object' && 'default' in e) return e;
-  var n = Object.create(null);
-  if (e) {
-    Object.keys(e).forEach(function (k) {
-      if (k !== 'default') {
-        var d = Object.getOwnPropertyDescriptor(e, k);
-        Object.defineProperty(n, k, d.get ? d : {
-          enumerable: true,
-          get: function () { return e[k]; }
-        });
+function _interopDefaultCompat (e) { return e && typeof e === 'object' && 'default' in e ? e : { default: e }; }
+
+var fs__default = /*#__PURE__*/_interopDefaultCompat(fs);
+var https__default = /*#__PURE__*/_interopDefaultCompat(https);
+
+const createPipelineRun = (namespace, pipelineRun) => new Promise((resolve, reject) => {
+  const body = JSON.stringify(pipelineRun);
+  const request = https__default.default.request({
+    hostname: process.env.KUBERNETES_SERVICE_HOST,
+    port: process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? "443",
+    path: `/apis/tekton.dev/v1/namespaces/${namespace}/pipelineruns`,
+    method: "POST",
+    rejectUnauthorized: false,
+    headers: {
+      Authorization: `Bearer ${fs__default.default.readFileSync("/var/run/secrets/kubernetes.io/serviceaccount/token", "utf8").trim()}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body)
+    }
+  }, (response) => {
+    let responseBody = "";
+    response.setEncoding("utf8");
+    response.on("data", (chunk) => {
+      responseBody += chunk;
+    });
+    response.on("end", () => {
+      if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+        resolve(JSON.parse(responseBody));
+      } else {
+        reject(new Error(`OpenShift API returned ${response.statusCode}: ${responseBody}`));
       }
     });
-  }
-  n.default = e;
-  return Object.freeze(n);
-}
-
-var k8s__namespace = /*#__PURE__*/_interopNamespaceCompat(k8s);
-
+  });
+  request.on("error", reject);
+  request.write(body);
+  request.end();
+});
 const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction({
   id: "openshift:pipeline-run",
   description: "Create a Tekton PipelineRun in the pipeline namespace.",
@@ -43,30 +60,6 @@ const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction(
     })
   },
   async handler(ctx) {
-    const kubeConfig = new k8s__namespace.KubeConfig();
-    const serviceAccountPath = "/var/run/secrets/kubernetes.io/serviceaccount";
-    const server = `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? "443"}`;
-    kubeConfig.loadFromOptions({
-      clusters: [{
-        name: "inCluster",
-        server,
-        caFile: `${serviceAccountPath}/ca.crt`
-      }],
-      users: [{
-        name: "inClusterUser",
-        authProvider: {
-          name: "tokenFile",
-          config: { tokenFile: `${serviceAccountPath}/token` }
-        }
-      }],
-      contexts: [{
-        name: "inClusterContext",
-        cluster: "inCluster",
-        user: "inClusterUser"
-      }],
-      currentContext: "inClusterContext"
-    });
-    const customObjects = kubeConfig.makeApiClient(k8s__namespace.CustomObjectsApi);
     const input = ctx.input;
     const pipelineRun = {
       apiVersion: "tekton.dev/v1",
@@ -96,14 +89,7 @@ const createPipelineRunAction = () => pluginScaffolderNode.createTemplateAction(
         ]
       }
     };
-    const response = await customObjects.createNamespacedCustomObject({
-      group: "tekton.dev",
-      version: "v1",
-      namespace: input.namespace,
-      plural: "pipelineruns",
-      body: pipelineRun
-    });
-    const created = response.body;
+    const created = await createPipelineRun(input.namespace, pipelineRun);
     const pipelineRunName = created.metadata?.name;
     if (!pipelineRunName) {
       throw new Error("OpenShift did not return the created PipelineRun name");

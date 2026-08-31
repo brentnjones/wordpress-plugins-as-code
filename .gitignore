@@ -5,3 +5,8 @@
 !/wp-content/themes/.gitkeep
 .env
 *.log
+
+node_modules/
+.yarn/
+dist/
+dist-types/

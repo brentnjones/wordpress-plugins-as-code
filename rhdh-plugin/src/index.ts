@@ -1,9 +1,41 @@
+import fs from 'node:fs';
+import https from 'node:https';
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import {
   createTemplateAction,
   scaffolderActionsExtensionPoint,
 } from '@backstage/plugin-scaffolder-node';
-import * as k8s from '@kubernetes/client-node';
+
+const createPipelineRun = (namespace: string, pipelineRun: Record<string, unknown>) =>
+  new Promise<{ metadata?: { name?: string } }>((resolve, reject) => {
+    const body = JSON.stringify(pipelineRun);
+    const request = https.request({
+      hostname: process.env.KUBERNETES_SERVICE_HOST,
+      port: process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? '443',
+      path: `/apis/tekton.dev/v1/namespaces/${namespace}/pipelineruns`,
+      method: 'POST',
+      rejectUnauthorized: false,
+      headers: {
+        Authorization: `Bearer ${fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8').trim()}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, response => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { responseBody += chunk; });
+      response.on('end', () => {
+        if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(JSON.parse(responseBody));
+        } else {
+          reject(new Error(`OpenShift API returned ${response.statusCode}: ${responseBody}`));
+        }
+      });
+    });
+    request.on('error', reject);
+    request.write(body);
+    request.end();
+  });
 
 const createPipelineRunAction = () =>
   createTemplateAction({
@@ -23,30 +55,6 @@ const createPipelineRunAction = () =>
       }),
     },
     async handler(ctx) {
-      const kubeConfig = new k8s.KubeConfig();
-      const serviceAccountPath = '/var/run/secrets/kubernetes.io/serviceaccount';
-      const server = `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT_HTTPS ?? '443'}`;
-      kubeConfig.loadFromOptions({
-        clusters: [{
-          name: 'inCluster',
-          server,
-          caFile: `${serviceAccountPath}/ca.crt`,
-        }],
-        users: [{
-          name: 'inClusterUser',
-          authProvider: {
-            name: 'tokenFile',
-            config: { tokenFile: `${serviceAccountPath}/token` },
-          },
-        }],
-        contexts: [{
-          name: 'inClusterContext',
-          cluster: 'inCluster',
-          user: 'inClusterUser',
-        }],
-        currentContext: 'inClusterContext',
-      });
-      const customObjects = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
       const input = ctx.input;
       const pipelineRun: Record<string, unknown> = {
         apiVersion: 'tekton.dev/v1',
@@ -77,14 +85,7 @@ const createPipelineRunAction = () =>
         },
       };
 
-      const response = await customObjects.createNamespacedCustomObject({
-        group: 'tekton.dev',
-        version: 'v1',
-        namespace: input.namespace,
-        plural: 'pipelineruns',
-        body: pipelineRun,
-      });
-      const created = response.body as { metadata?: { name?: string } };
+      const created = await createPipelineRun(input.namespace, pipelineRun);
       const pipelineRunName = created.metadata?.name;
       if (!pipelineRunName) {
         throw new Error('OpenShift did not return the created PipelineRun name');
